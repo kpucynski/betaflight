@@ -736,12 +736,8 @@ static bool validatePacketCrcStd(volatile elrsOtaPacket_t * const otaPktPtr)
     // Zero the crcHigh bits, as the CRC is calculated before it is ORed in
     otaPktPtr->crcHigh = 0;
 
-    // For smWide the FHSS slot is added to the CRC in byte 0 on PACKET_TYPE_RCDATAs
-    if (otaPktPtr->type == ELRS_RC_DATA_PACKET && receiver.switchMode == SM_WIDE_OR_8CH) {
-        otaPktPtr->crcHigh = (receiver.nonceRX % receiver.modParams->fhssHopInterval) + 1;
-    }
-
     // In v4, the nonce is XORed into the CRC initializer for non-sync packets
+    // (replaces the old FHSS slot in CRC for wide switch mode)
     uint16_t nonceValidator = (otaPktPtr->type == ELRS_SYNC_PACKET) ? 0 : receiver.nonceRX;
     uint16_t const calculatedCRC = calcCrc14((uint8_t *) otaPktPtr, 7, crcInitializer ^ nonceValidator);
     return inCRC == calculatedCRC;
