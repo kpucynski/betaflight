@@ -19,15 +19,15 @@
  */
 
 // expresslrs packet header types
-// 00 -> standard 4 channel data packet
-// 01 -> switch data packet
-// 11 -> tlm packet
+// 00 -> standard 4 channel data packet (uplink: RCDATA, downlink: LINKSTATS)
+// 01 -> data packet (MSP/telemetry)
+// 11 -> N/A
 // 10 -> sync packet with hop data
 typedef enum {
     ELRS_RC_DATA_PACKET = 0x00,
-    ELRS_MSP_DATA_PACKET = 0x01,
+    ELRS_DATA_PACKET = 0x01,
     ELRS_SYNC_PACKET = 0x02,
-    ELRS_TLM_PACKET = 0x03,
+    ELRS_LINKSTATS_PACKET = 0x00, // downlink only, same as RCDATA
 } elrsPacketType_e;
 
 typedef enum {
