@@ -947,7 +947,7 @@ bool expressLrsSpiInit(const struct rxSpiConfig_s *rxConfig, struct rxRuntimeSta
     } else {
         receiver.inBindingMode = true;
         receiver.UID = BindingUID;
-        crcInitializer = 0;
+        crcInitializer = ELRS_OTA_VERSION_ID;
     }
 
     expressLrsPhaseLockReset();
@@ -1100,7 +1100,7 @@ static void enterBindingMode(void)
 {
     // Set UID to special binding values
     receiver.UID = BindingUID;
-    crcInitializer = 0;
+    crcInitializer = ELRS_OTA_VERSION_ID;
     receiver.inBindingMode = true;
 
     setRfLinkRate(bindingRateIndex);

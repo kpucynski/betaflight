@@ -211,7 +211,7 @@ void fhssGenSequence(const uint32_t uidSeed, const elrsFreqDomain_e dom)
     seed = uidSeed;
     fhssConfig = &fhssConfigs[dom];
     seqCount = (256 / MAX(fhssConfig->freqCount, 1)) * fhssConfig->freqCount;
-    syncChannel = (fhssConfig->freqCount / 2) + 1;
+    syncChannel = fhssConfig->freqCount / 2;
     freqSpread = (fhssConfig->freqStop - fhssConfig->freqStart) * ELRS_FREQ_SPREAD_SCALE / MAX((fhssConfig->freqCount - 1), 1);
 
     // initialize the sequence array
