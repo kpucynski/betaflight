@@ -261,33 +261,23 @@ static void unpackChannelDataHybridSwitch8(uint16_t *rcData, volatile elrsOtaPac
  *
  * Hybrid switches uses 10 bits for each analog channel,
  * 1 bits for the low latency switch[0]
- * 6 or 7 bits for the round-robin switch
- * 1 bit for the TelemetryStatus, which may be in every packet or just idx 7
- * depending on TelemetryRatio
+ * 6 bits for the round-robin switch
+ * 1 bit for the stubbornAck (bit 6)
  *
  * Output: crsf.PackedRCdataOut, crsf.LinkStatistics.uplink_TX_Power
- * Returns: TelemetryStatus bit
  */
 static void unpackChannelDataHybridWide(uint16_t *rcData, volatile elrsOtaPacket_t const * const otaPktPtr)
 {
     unpackAnalogChannelData(rcData, otaPktPtr);
     const uint8_t switchByte = otaPktPtr->rc.switches;
 
-    // The round-robin switch, 6-7 bits with the switch index implied by the nonce. Some logic moved to processRFPacket
+    // The round-robin switch, 6 bits with the switch index implied by the nonce. Some logic moved to processRFPacket
     if (wideSwitchIndex >= 7) {
         txPower = switchByte & 0x3F;
     } else {
-        uint8_t bins;
-        uint16_t switchValue;
-        if (currTlmDenom > 1 && currTlmDenom < 8) {
-            bins = 63;
-            switchValue = switchByte & 0x3F; // 6-bit
-        } else {
-            bins = 127;
-            switchValue = switchByte & 0x7F; // 7-bit
-        }
+        uint16_t switchValue = switchByte & 0x3F; // 6-bit, bit 6 is always stubbornAck
 
-        rcData[5 + wideSwitchIndex] = convertSwitchNb(switchValue, bins);
+        rcData[5 + wideSwitchIndex] = convertSwitchNb(switchValue, 63);
     }
 
     setRssiChannelData(rcData);
@@ -769,9 +759,8 @@ rx_spi_received_e processRFPacket(volatile uint8_t *payload, uint32_t timeStampU
         if (receiver.connectionState == ELRS_CONNECTED && connectionHasModelMatch) {
             if (receiver.switchMode == SM_WIDE_OR_8CH) {
                 wideSwitchIndex = hybridWideNonceToSwitchIndex(receiver.nonceRX);
-                if ((currTlmDenom < 8) || wideSwitchIndex == 7) {
-                    confirmCurrentTelemetryPayload((otaPktPtr->rc.switches & 0x40) >> 6);
-                }
+                // In v4, stubbornAck is always in bit 6 of the switch byte
+                confirmCurrentTelemetryPayload((otaPktPtr->rc.switches & 0x40) >> 6);
             } else {
                 confirmCurrentTelemetryPayload(otaPktPtr->rc.switches & (1 << 6));
             }
