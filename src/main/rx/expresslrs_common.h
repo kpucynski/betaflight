@@ -33,7 +33,7 @@
 
 #include "rx/expresslrs_telemetry.h"
 
-#define ELRS_OTA_VERSION_ID 3
+#define ELRS_OTA_VERSION_ID 4
 
 #define ELRS_CRC_LEN 256
 #define ELRS_CRC14_POLY 0x2E57
@@ -54,11 +54,11 @@
 #define FREQ_HZ_TO_REG_VAL_900(freq) ((uint32_t)(freq / SX127x_FREQ_STEP))
 #define FREQ_HZ_TO_REG_VAL_24(freq)  ((uint32_t)(freq / SX1280_FREQ_STEP))
 
-#define ELRS_RATE_MAX_24  6
-#define ELRS_RATE_MAX_900 4
+#define ELRS_RATE_MAX_24  10
+#define ELRS_RATE_MAX_900 6
 #define ELRS_RATE_MAX     ((ELRS_RATE_MAX_24 > ELRS_RATE_MAX_900) ? ELRS_RATE_MAX_24 : ELRS_RATE_MAX_900)
-#define ELRS_BINDING_RATE_24  5
-#define ELRS_BINDING_RATE_900 2
+#define ELRS_BINDING_RATE_24  9
+#define ELRS_BINDING_RATE_900 3
 
 #define ELRS_MAX_CHANNELS 16
 #define ELRS_RSSI_CHANNEL 15
@@ -78,6 +78,8 @@ typedef enum {
     EU868,
     IN866,
     FCC915,
+    US433,
+    US433W,
 #endif
 #ifdef USE_RX_SX1280
     ISM2400,
@@ -89,8 +91,9 @@ typedef enum {
 } elrsFreqDomain_e;
 
 typedef enum {
-    SM_WIDE = 0,
-    SM_HYBRID = 1
+    SM_WIDE_OR_8CH = 0,
+    SM_HYBRID_OR_16CH = 1,
+    SM_12CH = 2
 } elrsSwitchMode_e;
 
 typedef enum {
@@ -107,44 +110,64 @@ typedef enum {
 } elrsTlmRatio_e;
 
 typedef enum {
-    RATE_LORA_4HZ = 0,
-    RATE_LORA_25HZ,
-    RATE_LORA_50HZ,
-    RATE_LORA_100HZ,
-    RATE_LORA_100HZ_8CH,
-    RATE_LORA_150HZ,
-    RATE_LORA_200HZ,
-    RATE_LORA_250HZ,
-    RATE_LORA_333HZ_8CH,
-    RATE_LORA_500HZ,
-    RATE_DVDA_250HZ,
-    RATE_DVDA_500HZ,
-    RATE_FLRC_500HZ,
-    RATE_FLRC_1000HZ,
-} elrsRfRate_e; // Max value of 16 since only 4 bits have been assigned in the sync package.
+    RATE_LORA_900_25HZ = 0,
+    RATE_LORA_900_50HZ,
+    RATE_LORA_900_100HZ,
+    RATE_LORA_900_100HZ_8CH,
+    RATE_LORA_900_150HZ,
+    RATE_LORA_900_200HZ,
+    RATE_LORA_900_200HZ_8CH,
+    RATE_LORA_900_250HZ,
+    RATE_LORA_900_333HZ_8CH,
+    RATE_LORA_900_500HZ,
+    RATE_LORA_900_50HZ_DVDA,
+    RATE_FSK_900_1000HZ_8CH,
+
+    RATE_LORA_2G4_25HZ = 20,
+    RATE_LORA_2G4_50HZ,
+    RATE_LORA_2G4_100HZ,
+    RATE_LORA_2G4_100HZ_8CH,
+    RATE_LORA_2G4_150HZ,
+    RATE_LORA_2G4_200HZ,
+    RATE_LORA_2G4_200HZ_8CH,
+    RATE_LORA_2G4_250HZ,
+    RATE_LORA_2G4_333HZ_8CH,
+    RATE_LORA_2G4_500HZ,
+    RATE_FLRC_2G4_250HZ_DVDA,
+    RATE_FLRC_2G4_500HZ_DVDA,
+    RATE_FLRC_2G4_500HZ,
+    RATE_FLRC_2G4_1000HZ,
+} elrsRfRate_e;
 
 typedef enum {
     RADIO_TYPE_SX127x_LORA,
+    RADIO_TYPE_LR1121_LORA_900,
+    RADIO_TYPE_LR1121_LORA_2G4,
+    RADIO_TYPE_LR1121_GFSK_900,
+    RADIO_TYPE_LR1121_GFSK_2G4,
+    RADIO_TYPE_LR1121_LORA_DUAL,
     RADIO_TYPE_SX128x_LORA,
     RADIO_TYPE_SX128x_FLRC,
 } elrsRadioType_e;
 
 typedef struct elrsModSettings_s {
     uint8_t index;
-    elrsRadioType_e radioType;        // elrsRadioType_e
-    elrsRfRate_e enumRate;            // Max value of 16 since only 4 bits have been assigned in the sync package.
+    elrsRadioType_e radioType;
+    elrsRfRate_e enumRate;
     uint8_t bw;
     uint8_t sf;
     uint8_t cr;
     uint32_t interval;                  // interval in us seconds that corresponds to that frequency
     elrsTlmRatio_e tlmInterval;       // every X packets is a response TLM packet, should be a power of 2
-    uint8_t fhssHopInterval;            // every X packets we hop to a new frequency. Max value of 16 since only 4 bits have been assigned in the sync package.
+    uint8_t fhssHopInterval;            // every X packets we hop to a new frequency.
     uint8_t preambleLen;
+    uint8_t payloadLen;                 // OTA4_PACKET_SIZE or OTA8_PACKET_SIZE
+    uint8_t numOfSends;                 // number of times to send each packet (DVDA)
 } elrsModSettings_t;
 
 typedef struct elrsRfPerfParams_s {
     int8_t index;
-    elrsRfRate_e enumRate;        // Max value of 16 since only 4 bits have been assigned in the sync package.
+    elrsRfRate_e enumRate;
     int16_t sensitivity;            // expected RF sensitivity based on
     uint16_t toa;                   // time on air in microseconds
     uint16_t disconnectTimeoutMs;   // Time without a packet before receiver goes to disconnected (ms)
@@ -170,28 +193,31 @@ typedef struct elrsOtaPacket_s {
         struct {
             uint8_t ch[5];
             uint8_t switches : 7,
-                    ch4 : 1;
+                    isArmed : 1;
         } rc;
-        /** PACKET_TYPE_MSP **/
+        /** PACKET_TYPE_DATA uplink **/
         struct {
-            uint8_t packageIndex;
+            uint8_t packageIndex : 7,
+                    stubbornAck : 1;
             uint8_t payload[ELRS_MSP_BYTES_PER_CALL];
-        } msp_ul;
+        } data_ul;
         /** PACKET_TYPE_SYNC **/
         struct {
             uint8_t fhssIndex;
             uint8_t nonce;
+            uint8_t rfRateEnum;
             uint8_t switchEncMode : 1,
                     newTlmRatio : 3,
-                    rateIndex : 4;
-            uint8_t UID3;
+                    geminiMode : 1,
+                    otaProtocol : 2,
+                    free : 1;
             uint8_t UID4;
             uint8_t UID5;
         } sync;
-        /** PACKET_TYPE_TLM **/
+        /** PACKET_TYPE_DATA / PACKET_TYPE_LINKSTATS downlink **/
         struct {
-            uint8_t type : ELRS_TELEMETRY_SHIFT,
-                    packageIndex : (8 - ELRS_TELEMETRY_SHIFT);
+            uint8_t packageIndex : 7,
+                    stubbornAck : 1;
             union {
                 struct {
                     uint8_t uplink_RSSI_1 : 7,
@@ -199,13 +225,13 @@ typedef struct elrsOtaPacket_s {
                     uint8_t uplink_RSSI_2 : 7,
                             modelMatch : 1;
                     uint8_t lq : 7,
-                            mspConfirm : 1;
+                            trueDiversityAvailable : 1;
                     int8_t SNR;
                     uint8_t free;
                 } ul_link_stats;
                 uint8_t payload[ELRS_TELEMETRY_BYTES_PER_CALL];
             };
-        } tlm_dl;
+        } data_dl;
     };
     uint8_t crcLow;
 } __attribute__ ((__packed__)) elrsOtaPacket_t;
@@ -254,5 +280,4 @@ uint16_t convertSwitch3b(const uint16_t val);
 uint16_t convertSwitchNb(const uint16_t val, const uint16_t max);
 uint8_t hybridWideNonceToSwitchIndex(const uint8_t nonce);
 
-uint8_t airRateIndexToIndex24(uint8_t airRate, uint8_t currentIndex);
-uint8_t airRateIndexToIndex900(uint8_t airRate, uint8_t currentIndex);
+uint8_t enumRateToIndex(elrsRfRate_e eRate, uint8_t currentIndex);
