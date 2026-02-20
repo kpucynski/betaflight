@@ -838,6 +838,7 @@ static busStatus_e sx1280GetStatsCmdComplete(uintptr_t arg)
 
 void sx1280HandleFromTock(void)
 {
+    static bool pendingTelemetry = false;
     ATOMIC_BLOCK(NVIC_PRIO_MAX) {
         if (expressLrsIsFhssReq()) {
             if (sx1280EnableBusy()) {
@@ -852,9 +853,18 @@ void sx1280HandleFromTock(void)
             // it happens in sx1280IsFhssReq called from packet completion)
             if (sx1280EnableBusy()) {
                 sx1280SetFreqComplete(0);
+                pendingTelemetry = false;
+            } else {
+                // If busy, queue telemetry to be sent as soon as bus is free
+                pendingTelemetry = true;
             }
-            // If busy, skip this cycle - telemetry will be missed but link stays healthy
         }
+    }
+
+    // Outside atomic block: if telemetry is pending and bus is now free, send it immediately
+    if (pendingTelemetry && !sx1280IsBusy()) {
+        sx1280SetFreqComplete(0);
+        pendingTelemetry = false;
     }
 }
 

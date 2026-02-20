@@ -468,11 +468,9 @@ static void expressLrsSendTelemResp(void)
 #ifdef USE_ELRSV3
     uint8_t nonceValidator = 0;
 #else
-    // This is a hack because this implementation sends telemetry right after a packet is received
-    // this is not a problem for all rates except F500, which will send telemetry in the previous
-    // packet period, which 4.0 will not accept, so we fake the validator to be in the correct/wrong period
-    bool isF500 = domainIsTeam24() && (receiver.rateIndex == 1);
-    uint8_t nonceValidator = receiver.nonceRX + (isF500 ? 0 : 1);
+    // ExpressLRS uses OtaNonce (current nonce value) directly in CRC calculation.
+    // TOCK timing ensures telemetry arrives at TX in correct packet period.
+    uint8_t nonceValidator = receiver.nonceRX;
 #endif
     uint16_t crc = calcCrc14((uint8_t *) &otaPkt, 7, crcInitializer ^ nonceValidator);
     otaPkt.crcHigh = (crc >> 8);
@@ -808,8 +806,13 @@ rx_spi_received_e processRFPacket(volatile uint8_t *payload, uint32_t timeStampU
     if (!validatePacketCrcStd(otaPktPtr)) {
         return RX_SPI_RECEIVED_NONE;
     }
-    const uint32_t PACKET_HANDLING_TO_TOCK_ISR_DELAY_US = 250;
-    phaseLockEprEvent(EPR_EXTERNAL, timeStampUs + PACKET_HANDLING_TO_TOCK_ISR_DELAY_US);
+
+    // Calculate TOCK timing to ensure telemetry arrives at TX in correct packet period.
+    // Use interval (packet period, us) as a proxy for rate.
+    // For fast rates (interval <= 2000us), use 250us slack; for slower, use 600us.
+    const uint32_t interval = receiver.modParams->interval;
+    const uint32_t PACKET_TO_TOCK_SLACK_US = (interval <= 2000) ? 250 : 600;
+    phaseLockEprEvent(EPR_EXTERNAL, timeStampUs + PACKET_TO_TOCK_SLACK_US);
 
     bool shouldStartTimer = false;
     uint32_t timeStampMs = millis();
