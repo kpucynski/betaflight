@@ -441,10 +441,11 @@ static void expressLrsSendTelemResp(void)
     }
 
     // In v4, the nonce is XORed into the CRC initializer for non-sync packets.
-    // Use nonceRX + 1 because in Betaflight the nonce is incremented in the TICK ISR
-    // (180° out of phase), so at TOCK time nonceRX is one behind the ELRS OtaNonce
-    // which is incremented at the start of TOCK. The TX validates TLM CRC using its
-    // OtaNonce which equals nonceRX + 1 at this point.
+    // In Betaflight ELRS v4: nonce increments in TICK ISR (mid-packet), telemetry sent from TOCK.
+    // At TOCK time, nonceRX has already been incremented, so TX's OtaNonce == nonceRX.
+    // However, we're calling this from sx1280IsFhssReq which happens AFTER packet processing,
+    // and the nonce was already incremented in the previous TICK, so we need +1 to match
+    // the TX's current OtaNonce which incremented at the start of this packet period.
     uint16_t crc = calcCrc14((uint8_t *) &otaPkt, 7, crcInitializer ^ (receiver.nonceRX + 1));
     otaPkt.crcHigh = (crc >> 8);
     otaPkt.crcLow = crc;
