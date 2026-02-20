@@ -846,6 +846,14 @@ void sx1280HandleFromTock(void)
             } else {
                 pendingDoFHSS = true;
             }
+        } else {
+            // No FHSS needed, but we still need to decide telemetry vs plain RX
+            // This must happen from TOCK in elrs4 architecture (unlike betaflight where
+            // it happens in sx1280IsFhssReq called from packet completion)
+            if (sx1280EnableBusy()) {
+                sx1280SetFreqComplete(0);
+            }
+            // If busy, skip this cycle - telemetry will be missed but link stays healthy
         }
     }
 }
